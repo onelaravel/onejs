@@ -244,7 +244,7 @@ class ContextDevServer {
         let compilerPath = config.watchPaths.compiler;
         // fallback mainly for dev env if scripts/compiler exists
         if (!compilerPath.includes('node_modules')) {
-             if (!require('fs').existsSync(path.resolve(projectRoot, 'scripts/compiler'))) {
+             if (!existsSync(path.resolve(projectRoot, 'scripts/compiler'))) {
                  // Try looking in node_modules
                  compilerPath = path.resolve(projectRoot, 'node_modules/onelaraveljs/scripts/compiler');
              } else {
@@ -254,7 +254,7 @@ class ContextDevServer {
              compilerPath = path.resolve(projectRoot, compilerPath);
         }
 
-        if (require('fs').existsSync(compilerPath)) {
+        if (existsSync(compilerPath)) {
             console.log(`👀 Watching compiler in: ${compilerPath}`);
             watch(compilerPath, { recursive: true }, (eventType, filename) => {
                 if (filename && (filename.endsWith('.py') || filename.endsWith('.js'))) {
