@@ -1,11 +1,11 @@
-# @onelaravel/onejs
+# onelaraveljs
 
 The Core JavaScript Framework for OneLaravel applications. This library provides the fundamental runtime, view management, and routing capabilities for building OneLaravel SPAs.
 
 ## Installation
 
 ```bash
-npm install @onelaravel/onejs
+npm install onelaraveljs
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ resources/js/
 In your project's main JavaScript entry point, you need to wire up the Core with your Project's views:
 
 ```javascript
-import { App, viewLoader } from '@onelaravel/onejs';
+import { App, viewLoader } from 'onelaraveljs';
 import { viewRegistry } from './config/viewRegistry.generated.js';
 
 // 1. Dependency Injection: Tell the Core where to find your views
@@ -71,7 +71,7 @@ Ensure your main layout file injects the configuration:
 OneJS comes with a built-in Event Service for cross-component communication:
 
 ```javascript
-import { App } from '@onelaravel/onejs';
+import { App } from 'onelaraveljs';
 
 // Listen
 App.Event.on('user:logged-in', (user) => {

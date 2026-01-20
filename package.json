@@ -1,6 +1,6 @@
 {
-  "name": "onejs",
-  "version": "1.0.0",
+  "name": "onelaraveljs",
+  "version": "1.0.1",
   "description": "OneLaravel JS Framework Core",
   "main": "index.js",
   "type": "module",
