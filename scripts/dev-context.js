@@ -9,7 +9,7 @@
  */
 
 import { spawn } from 'child_process';
-import { watch } from 'fs';
+import { watch, existsSync } from 'fs';
 import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -20,6 +20,7 @@ const __dirname = path.dirname(__filename);
 
 // Get context from command line argument
 const context = process.argv[2] || 'web'; // Default to 'web'
+const projectRoot = process.env.ONEJS_PROJECT_ROOT || process.cwd();
 
 if (!['web', 'admin'].includes(context)) {
     console.error('❌ Invalid context. Use: web or admin');
@@ -27,7 +28,6 @@ if (!['web', 'admin'].includes(context)) {
 }
 
 // Load build config
-const projectRoot = process.env.ONEJS_PROJECT_ROOT || process.cwd();
 const buildConfigPath = path.resolve(projectRoot, 'build.config.json');
 const buildConfig = JSON.parse(readFileSync(buildConfigPath, 'utf-8'));
 const contextConfig = buildConfig.contexts[context];
@@ -42,9 +42,6 @@ const config = {
     watchPaths: {
         blade: contextConfig.sources, // Array of blade source paths from config
         jsCore: 'resources/js', // Watch entire js directory
-        jsViewsExclude: 'resources/js/views', // Exclude views directory
-        jsBuildExclude: 'resources/js/build',
-        jsConfigExclude: 'resources/js/config',
         compiler: 'node_modules/onelaraveljs/scripts/compiler'
     },
     buildCommand: `npm run build:${context}`,
@@ -65,7 +62,8 @@ class ContextDevServer {
     }
 
     async start() {
-        console.log(`🚀 Starting Development Server for [${config.context.toUpperCase()}] context...\n`);
+        console.log(`🚀 Starting Development Server for [${config.context.toUpperCase()}] context...`);
+        console.log(`📂 Project Root: ${projectRoot}\n`);
         
         // Initial build (templates + webpack)
         await this.runBuild();
@@ -86,7 +84,7 @@ class ContextDevServer {
         console.log(`📦 Context: ${config.context.toUpperCase()}`);
         console.log('📝 Watching:');
         console.log(`   - Blade files: ${config.watchPaths.blade.join(', ')}`);
-        console.log(`   - JS Core: ${config.watchPaths.jsCore} (excluding views)`);
+        console.log(`   - JS Core: ${config.watchPaths.jsCore} (excluding generated views)`);
         console.log(`   - Compiler: ${config.watchPaths.compiler}`);
         console.log(`🌐 Laravel Server: http://localhost:${config.phpPort}`);
         console.log(`🔄 Auto-reload: Active (add script to your layout)`);
@@ -108,7 +106,7 @@ class ContextDevServer {
         return new Promise((resolve, reject) => {
             const build = spawn('sh', ['-c', config.buildCommand], { 
                 stdio: 'inherit',
-                cwd: path.resolve(__dirname, '..')
+                cwd: projectRoot
             });
             
             build.on('close', (code) => {
@@ -182,7 +180,7 @@ class ContextDevServer {
 })();
 `;
         
-        const publicPath = path.resolve(__dirname, '../public/reload-dev.js');
+        const publicPath = path.resolve(projectRoot, 'public/reload-dev.js');
         writeFileSync(publicPath, scriptContent, 'utf-8');
         console.log(`✅ Created reload script at public/reload-dev.js\n`);
     }
@@ -190,9 +188,9 @@ class ContextDevServer {
     startPhpServe() {
         console.log(`🐘 Starting PHP server on port ${config.phpPort}...`);
         
-        this.processes.phpServe = spawn('php', ['artisan', 'serve', `--port=${config.phpPort}`], {
-            stdio: 'inherit',
-            cwd: path.resolve(__dirname, '..')
+        this.processes.phpServe = spawn('php', ['artisan', 'serve', `--port=${config.phpPort}`],
+ {                                                                                                          stdio: 'inherit',
+            cwd: projectRoot
         });
 
         this.processes.phpServe.on('error', (err) => {
@@ -209,33 +207,63 @@ class ContextDevServer {
     startWatcher() {
         // Watch blade files (multiple source directories from config)
         config.watchPaths.blade.forEach(bladePath => {
-            console.log(`👀 Watching blade files in: ${bladePath}`);
-            watch(bladePath, { recursive: true }, (eventType, filename) => {
-                if (filename && filename.endsWith('.blade.php')) {
-                    this.handleFileChange('blade', path.join(bladePath, filename));
+            const absoluteBladePath = path.resolve(projectRoot, bladePath);
+            if (existsSync(absoluteBladePath)) {
+                console.log(`👀 Watching blade files in: ${bladePath}`);
+                watch(absoluteBladePath, { recursive: true }, (eventType, filename) => {
+                    if (filename && filename.endsWith('.blade.php')) {
+                        this.handleFileChange('blade', path.join(bladePath, filename));
+                    }
+                });
+            } else {
+                 console.warn(`⚠️  Blade path not found: ${bladePath}`);
+            }
+        });
+
+        // Watch JS core files (resources/js)
+        const jsCorePath = path.resolve(projectRoot, config.watchPaths.jsCore);
+        if (existsSync(jsCorePath)) {
+            console.log(`👀 Watching JS core in: ${config.watchPaths.jsCore}`);
+            watch(jsCorePath, { recursive: true }, (eventType, filename) => {
+                if (filename && filename.endsWith('.js')) {
+                    const fullPath = path.join(jsCorePath, filename);
+                    // Skip if file is in excluded directories
+                    const isInViews = fullPath.includes(path.sep + 'views' + path.sep) || fullPath.endsWith(path.sep + 'views');
+                    const isInBuild = fullPath.includes(path.sep + 'build' + path.sep) || fullPath.endsWith(path.sep + 'build');
+                    const isInConfig = fullPath.includes(path.sep + 'config' + path.sep) || fullPath.endsWith(path.sep + 'config');
+                    const isGeneratedCore = fullPath.includes(path.sep + 'core' + path.sep + 'ViewTemplate.js');
+
+                    if (!isInViews && !isInBuild && !isInConfig && !isGeneratedCore) {
+                        this.handleFileChange('js-core', filename);
+                    }
                 }
             });
-        });
+        }
 
-        // Watch JS core files (entire onejs directory, excluding views)
-        console.log(`👀 Watching JS core in: ${config.watchPaths.jsCore} (excluding views)`);
-        watch(config.watchPaths.jsCore, { recursive: true }, (eventType, filename) => {
-            if (filename && filename.endsWith('.js')) {
-                const fullPath = path.join(config.watchPaths.jsCore, filename);
-                // Skip if file is in views directory
-                if (!fullPath.includes(path.sep + 'views' + path.sep) && !fullPath.endsWith(path.sep + 'views')) {
-                    this.handleFileChange('js-core', filename);
+        // Watch compiler files - Check if exists first to avoid crash
+        let compilerPath = config.watchPaths.compiler;
+        // fallback mainly for dev env if scripts/compiler exists
+        if (!compilerPath.includes('node_modules')) {
+             if (!require('fs').existsSync(path.resolve(projectRoot, 'scripts/compiler'))) {
+                 // Try looking in node_modules
+                 compilerPath = path.resolve(projectRoot, 'node_modules/onelaraveljs/scripts/compiler');
+             } else {
+                 compilerPath = path.resolve(projectRoot, 'scripts/compiler');
+             }
+        } else {
+             compilerPath = path.resolve(projectRoot, compilerPath);
+        }
+
+        if (require('fs').existsSync(compilerPath)) {
+            console.log(`👀 Watching compiler in: ${compilerPath}`);
+            watch(compilerPath, { recursive: true }, (eventType, filename) => {
+                if (filename && (filename.endsWith('.py') || filename.endsWith('.js'))) {
+                    this.handleFileChange('compiler', filename);
                 }
-            }
-        });
-
-        // Watch compiler files
-        console.log(`👀 Watching compiler in: ${config.watchPaths.compiler}`);
-        watch(config.watchPaths.compiler, { recursive: true }, (eventType, filename) => {
-            if (filename && (filename.endsWith('.py') || filename.endsWith('.js'))) {
-                this.handleFileChange('compiler', filename);
-            }
-        });
+            });
+        } else {
+             console.log(`⚠️ Compiler path not found for watching: ${compilerPath}`);
+        }
     }
 
     handleFileChange(type, filename) {
