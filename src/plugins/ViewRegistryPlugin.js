@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-class ViewRegistryPlugin {
+export class ViewRegistryPlugin {
     constructor(options = {}) {
         // Use process.cwd() to default to the project root, making this plugin portable
         this.viewsDir = options.viewsDir || path.resolve(process.cwd(), 'resources/js/views');
