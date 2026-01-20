@@ -1,5 +1,5 @@
 {
-  "name": "@oneaicoder/onejs",
+  "name": "onejs",
   "version": "1.0.0",
   "description": "OneLaravel JS Framework Core",
   "main": "index.js",
