@@ -1,6 +1,6 @@
 {
   "name": "onelaraveljs",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "OneLaravel JS Framework Core & Compiler",
   "main": "index.js",
   "bin": {
