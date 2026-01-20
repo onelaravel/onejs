@@ -1,0 +1,13 @@
+{
+  "name": "@onelaravel/onejs",
+  "version": "1.0.0",
+  "description": "OneLaravel JS Framework Core",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["framework", "laravel", "spa"],
+  "author": "OneLaravel",
+  "license": "MIT"
+}
