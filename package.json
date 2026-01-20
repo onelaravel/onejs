@@ -1,13 +1,16 @@
 {
   "name": "onelaraveljs",
-  "version": "1.0.1",
-  "description": "OneLaravel JS Framework Core",
+  "version": "1.1.0",
+  "description": "OneLaravel JS Framework Core & Compiler",
   "main": "index.js",
+  "bin": {
+    "onejs-build": "./bin/onejs-build.js"
+  },
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["framework", "laravel", "spa"],
+  "keywords": ["framework", "laravel", "spa", "compiler"],
   "author": "OneLaravel",
   "license": "MIT"
 }
