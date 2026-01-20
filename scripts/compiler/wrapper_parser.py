@@ -16,22 +16,37 @@ class WrapperParser:
         self.wrapper_function_content = ""
         self.wrapper_config_content = ""
 
-        # Convert to absolute path if relative
-        if not os.path.isabs(file_path):
-            # Try path relative to current working directory
-            if not os.path.exists(file_path):
-                # Try path relative to script directory
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                alt_path = os.path.join(script_dir, "..", "..", file_path)
+        # Logic tìm kiếm file template:
+        # 1. Tìm theo đường dẫn được cung cấp (thường là User Custom Override trong project)
+        # 2. Nếu không thấy, tìm file mặc định trong thư mục templates của library (onejs/templates/wraper.js)
+        
+        found_path = None
+        
+        # 1. Check đường dẫn user cung cấp (relative to Project Root)
+        if os.path.exists(file_path):
+            found_path = file_path
+        else:
+            # 2. Check đường dẫn mặc định trong library
+            # __file__ = .../onejs/scripts/compiler/wrapper_parser.py
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            # library_root = .../onejs
+            # template_path = .../onejs/templates/wraper.js
+            lib_template_path = os.path.normpath(os.path.join(script_dir, "..", "..", "templates", "wraper.js"))
+            
+            if os.path.exists(lib_template_path):
+                found_path = lib_template_path
+            else:
+                # 3. Fallback: check alt_path (giữ tương thích cũ)
+                alt_path = os.path.normpath(os.path.join(script_dir, "..", "..", file_path))
                 if os.path.exists(alt_path):
-                    file_path = alt_path
+                    found_path = alt_path
 
-        if not os.path.exists(file_path):
-            print(f"Warning: Wrapper file not found: {file_path}")
+        if not found_path:
+            print(f"Warning: Wrapper file not found. Checked: {file_path} and library defaults.")
             return "", ""
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(found_path, 'r', encoding='utf-8') as f:
                 content = f.read()
         except Exception as e:
             print(f"Error reading wrapper file: {e}")
