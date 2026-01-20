@@ -27,7 +27,8 @@ if (!['web', 'admin'].includes(context)) {
 }
 
 // Load build config
-const buildConfigPath = path.resolve(__dirname, '../build.config.json');
+const projectRoot = process.env.ONEJS_PROJECT_ROOT || process.cwd();
+const buildConfigPath = path.resolve(projectRoot, 'build.config.json');
 const buildConfig = JSON.parse(readFileSync(buildConfigPath, 'utf-8'));
 const contextConfig = buildConfig.contexts[context];
 
@@ -40,9 +41,11 @@ const config = {
     context: context,
     watchPaths: {
         blade: contextConfig.sources, // Array of blade source paths from config
-        jsCore: 'resources/js/onejs', // Watch entire onejs directory
-        jsViewsExclude: 'resources/js/onejs/views', // Exclude views directory
-        compiler: 'scripts/compiler'
+        jsCore: 'resources/js', // Watch entire js directory
+        jsViewsExclude: 'resources/js/views', // Exclude views directory
+        jsBuildExclude: 'resources/js/build',
+        jsConfigExclude: 'resources/js/config',
+        compiler: 'node_modules/onelaraveljs/scripts/compiler'
     },
     buildCommand: `npm run build:${context}`,
     phpServeCommand: 'php artisan serve',
