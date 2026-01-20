@@ -1,5 +1,5 @@
 import { SEOTagConfig } from './SEOConfig.js';
-import { ViewTemplates } from './ViewTemplate.js';
+// ViewTemplates import removed
 import { hasData, uniqId } from '../helpers/utils.js';
 import { View, ViewEngine } from './View.js';
 import { ViewState } from './ViewState.js';
@@ -126,7 +126,7 @@ export class ViewManager {
         /**
          * @type {Object<string, ViewEngine>}
          */
-        this.templates = ViewTemplates;
+        this.templates = viewLoader.registry || {};
         /**
          * @type {Object<string, string>}
          */
@@ -295,8 +295,8 @@ export class ViewManager {
         this._changedSections = [];
 
         // Initialize views if not already done
-        if (!this.templates) {
-            this.templates = ViewTemplates;
+        if (!this.templates || Object.keys(this.templates).length === 0) {
+            this.templates = viewLoader.registry || {};
         }
 
         // Initialize current scope

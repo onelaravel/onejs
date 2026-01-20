@@ -1005,7 +1005,7 @@ class BladeCompiler:
         # Add View import if scripts are registered
         view_import = ""
         if script_registrations:
-            view_import = "import { View } from '../core/View.js';\n\n"
+            view_import = "import { View } from 'onelaraveljs';\n\n"
         
         return_template = setup_script_line + view_import + script_registrations_line + """export function """ + function_name + """($$$DATA$$$ = {}, systemData = {}) {
     const {App, View, __base__, __layout__, __page__, __component__, __template__, __context__, __partial__, __system__, __env = {}, __helper = {}} = systemData;

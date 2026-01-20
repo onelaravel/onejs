@@ -13,23 +13,31 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load build.config.json to get context paths
-const buildConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../build.config.json'), 'utf-8'));
+// Load build.config.json from project root
+const projectRoot = process.env.ONEJS_PROJECT_ROOT || process.cwd();
+const configPath = path.join(projectRoot, 'build.config.json');
+
+try {
+    var buildConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+} catch (e) {
+    console.error(`Error loading build.config.json from ${configPath}:`, e.message);
+    process.exit(1);
+}
 
 // Get context from environment variable
 const buildContext = process.env.BUILD_CONTEXT || 'web';
 
 // Determine static path based on context
 const STATIC_PATH = buildConfig.contexts[buildContext] 
-    ? path.join(__dirname, '..', path.dirname(buildConfig.contexts[buildContext].dist.bundle))
-    : path.join(__dirname, '../public/static/app');
+    ? path.join(projectRoot, path.dirname(buildConfig.contexts[buildContext].dist.bundle))
+    : path.join(projectRoot, 'public/static/app');
 
 // Determine base URL path for assets
 const BASE_URL = buildConfig.contexts[buildContext]
     ? `/static/${buildContext}/js/`
     : '/static/app/';
 
-const OUTPUT_FILE = path.join(__dirname, '../resources/views/partials/assets-scripts.blade.php');
+const OUTPUT_FILE = path.join(projectRoot, 'resources/views/partials/assets-scripts.blade.php');
 
 function getAssetsByCategory() {
     const assets = {

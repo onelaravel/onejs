@@ -221,7 +221,7 @@ def build_view_template_importer(created_files, output_path, context='all'):
     
     if build_config and context != 'all' and context in build_config['contexts']:
         # Use context-specific registry file
-        output_path = os.path.join(Path(__file__).parent.parent, build_config['contexts'][context]['output']['register'])
+        output_path = os.path.join(config.project_root, build_config['contexts'][context]['output']['register'])
     
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -385,8 +385,9 @@ def build_main_spa_file():
 
 def load_build_config():
     """Load build.config.json"""
-    config_path = Path(__file__).parent.parent / 'build.config.json'
-    if not config_path.exists():
+    # Use the config object to find the project root
+    config_path = os.path.join(config.project_root, 'build.config.json')
+    if not os.path.exists(config_path):
         return None
     
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -417,15 +418,15 @@ def get_source_directories(context_name=None):
         # Return sources for specific context
         sources = build_config['contexts'][context_name]['sources']
         # Convert relative paths to absolute
-        base_path = Path(__file__).parent.parent
-        return [str(base_path / src) for src in sources]
+        base_path = config.project_root
+        return [os.path.join(base_path, src) for src in sources]
     elif build_config and context_name == 'all':
         # Return all sources from all contexts
-        base_path = Path(__file__).parent.parent
+        base_path = config.project_root
         all_sources = set()
         for ctx in build_config['contexts'].values():
             for src in ctx['sources']:
-                all_sources.add(str(base_path / src))
+                all_sources.add(os.path.join(base_path, src))
         return list(all_sources)
     else:
         # Fallback to config.get_build_directories()
@@ -537,7 +538,7 @@ def main():
                     # Create a proxy ViewTemplate.js in core/ that re-exports from context registry
                     core_template_path = os.path.join(config.js_input_path, 'core', 'ViewTemplate.js')
                     relative_to_registry = os.path.relpath(
-                        os.path.join(Path(__file__).parent.parent, registry_path),
+                        os.path.join(config.project_root, registry_path),
                         os.path.dirname(core_template_path)
                     ).replace('\\', '/')
                     
