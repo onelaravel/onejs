@@ -13,6 +13,7 @@ class PHPToJSConverter:
         
     def convert_php_expression_to_js(self, expr: str) -> str:
         """Convert PHP expression to JavaScript"""
+        # print(f"DEBUG_CONVERT: {expr}")
         if not expr or not expr.strip():
             return "''"
             
@@ -34,7 +35,9 @@ class PHPToJSConverter:
                 pass  # Skip string concatenation for ternary operators
             # Check if this is object access pattern (var->method) - skip if so
             # Pattern: anything->anything (not just $var->method)
-            elif not re.search(r'[a-zA-Z_][a-zA-Z0-9_]*->[a-zA-Z_][a-zA-Z0-9_]*', expr):
+            # Also skip if it looks like JS object access (obj.prop)
+            elif not re.search(r'[a-zA-Z_][a-zA-Z0-9_]*->[a-zA-Z_][a-zA-Z0-9_]*', expr) and \
+                 not re.search(r'[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*', expr):
                 expr = self._handle_string_concatenation(expr)
                 # Restore ++ and -- operators
                 expr = expr.replace('__INC_OPERATOR__', '++')
@@ -457,6 +460,12 @@ class PHPToJSConverter:
             # Skip ternary operators like condition ? value1 : value2
             if re.search(r'\?.*:', expr):
                 return expr
+            
+            # Skip JS style property access (obj.prop)
+            # This prevents converting console.log to console+log
+            if re.search(r'\b[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*\b', expr_without_strings):
+                return expr
+
             # Also skip object method calls like now().format() or App.Helper.now().format()
             # Pattern: method().method() or object.method().method()
             if re.search(r'[a-zA-Z_][a-zA-Z0-9_]*\s*\([^)]*\)\s*\.\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\(', expr):

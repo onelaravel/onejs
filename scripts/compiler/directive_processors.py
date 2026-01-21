@@ -179,14 +179,132 @@ class DirectiveProcessor:
         return False
     
     def process_json_directive(self, line):
-        """Process @json directive"""
-        if line.startswith('@json'):
-            # Extract variable from @json($variable)
-            json_match = re.match(r'@json\s*\(\s*\$?(\w+)\s*\)', line)
-            if json_match:
-                variable = json_match.group(1)
-                return f'${{{JS_FUNCTION_PREFIX}.json({variable})}}'
-        return None
+        """Process @json directive
+        Handles:
+        - @json(['test' => true]) -> ${JSON.stringify({"test":true})}
+        - @json(['test'=>$state]) -> ${this.__output(['state'], () => JSON.stringify({"test":state}))}
+        """
+        if not line.startswith('@json'):
+            return None
+
+        # Extract balanced parentheses content
+        m = re.match(r'@json\s*\(', line)
+        if not m:
+            return None
+        
+        start_pos = m.end() - 1
+        from utils import extract_balanced_parentheses
+        content, end_pos = extract_balanced_parentheses(line, start_pos)
+        
+        if content is None:
+            return None
+
+        expr = content.strip()
+        
+        # Parse variable names from the expression
+        # Similar to @out directive - detect $variables inside the array
+        vars_set = []
+        in_single = False
+        in_double = False
+        escape = False
+        i = 0
+        
+        while i < len(expr):
+            ch = expr[i]
+            if escape:
+                escape = False
+                i += 1
+                continue
+            if ch == '\\':
+                escape = True
+                i += 1
+                continue
+            if in_single:
+                if ch == "'":
+                    in_single = False
+                i += 1
+                continue
+            if in_double:
+                if ch == '"':
+                    in_double = False
+                    i += 1
+                    continue
+                # inside double quotes, $var is valid
+                if ch == '$':
+                    j = i + 1
+                    if j < len(expr) and re.match(r'[a-zA-Z_]', expr[j]):
+                        start = j
+                        j += 1
+                        while j < len(expr) and re.match(r'[a-zA-Z0-9_]', expr[j]):
+                            j += 1
+                        name = expr[start:j]
+                        if name not in vars_set:
+                            vars_set.append(name)
+                        i = j
+                        continue
+                i += 1
+                continue
+
+            # not in any quote
+            if ch == "'":
+                in_single = True
+                i += 1
+                continue
+            if ch == '"':
+                in_double = True
+                i += 1
+                continue
+            if ch == '$':
+                j = i + 1
+                if j < len(expr) and re.match(r'[a-zA-Z_]', expr[j]):
+                    start = j
+                    j += 1
+                    while j < len(expr) and re.match(r'[a-zA-Z0-9_]', expr[j]):
+                        j += 1
+                    name = expr[start:j]
+                    if name not in vars_set:
+                        vars_set.append(name)
+                    i = j
+                    continue
+            i += 1
+
+        # Smart conversion for PHP array with variables
+        from php_converter import php_to_js
+        
+        # Replace variables with placeholders first
+        expr_for_conv = expr
+        var_placeholders = {}
+        for i, var_name in enumerate(vars_set):
+            placeholder = f'__VAR_{i}__'
+            var_placeholders[placeholder] = var_name
+            # Replace $var with placeholder string
+            expr_for_conv = expr_for_conv.replace(f'${var_name}', f'"{placeholder}"')
+        
+        # Convert PHP array to JSON
+        try:
+            json_str = convert_php_array_to_json(expr_for_conv)
+        except Exception:
+            json_str = expr_for_conv
+        
+        # Replace placeholders back with JavaScript variable references
+        for placeholder, var_name in var_placeholders.items():
+            json_str = json_str.replace(f'"{placeholder}"', var_name)
+        
+        # Convert any remaining PHP syntax to JS (like true/false)
+        try:
+            js_expr = php_to_js(json_str)
+        except Exception:
+            js_expr = json_str
+
+        # Build the output
+        if vars_set:
+            # Has variables - use __output with subscription
+            subscribe = ','.join([f"'{v}'" for v in vars_set])
+            subscribe_js = f'[{subscribe}]'
+            return '${' + f"this.__output({subscribe_js}, () => JSON.stringify({js_expr}))" + '}'
+        else:
+            # No variables - direct JSON.stringify
+            return '${' + f"JSON.stringify({js_expr})" + '}'
     
     def process_lang_directive(self, line):
         """Process @lang directive"""
