@@ -4,14 +4,29 @@ import { viewLoader } from './src/core/ViewLoader.js';
 import { EventService } from './src/core/services/EventService.js';
 import initApp from './src/init.js';
 import { View } from './src/core/View.js';
+import logger from './src/core/logger.js';
+import { StoreService } from './src/core/services/StoreService.js';
+import { HttpService } from './src/core/services/HttpService.js';
+import { StorageService } from './src/core/services/StorageService.js';
+export { OneMarkup } from './src/core/OneMarkup.js';
 
+export const Store = StoreService.getInstance();
+export const Storage = StorageService.getInstance('storage');
+export const EventBus = EventService.getInstance();
+// HttpService Class
 // Export Core Components
-export { 
-    App, 
+export const Http = new HttpService();
+
+export {
+    App,
     viewLoader,
     EventService,
     initApp,
-    View
+    View,
+    StoreService,
+    HttpService,
+    StorageService,
+    logger
 };
 
 // Default export
