@@ -1,7 +1,7 @@
 export class EventService {
     static instances = new Map();
     static getInstance(name = null) {
-        if (!name || name === '' || ame === undefined) {
+        if (!name || name === '' || name === undefined) {
             name = 'default';
         }
         if (!EventService.instances.has(name)) {
