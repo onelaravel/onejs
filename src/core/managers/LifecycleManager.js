@@ -149,15 +149,15 @@ export class LifecycleManager {
         const ctrl = this.controller;
         // logger.log(`🟩 mounted START: ${ctrl.path}`);
         ctrl.isDestroyed = false;
-        
+
         if (!ctrl.isMarkupScanned) {
             ctrl.__scanDOMElements(ctrl.id);
             ctrl.isMarkupScanned = true;
         }
-        
+
         if (!ctrl.isMounted) {
             this.beforeMount();
-            
+
             try {
                 this.mounting();
 
@@ -168,7 +168,7 @@ export class LifecycleManager {
                 if (ctrl.originalView && ctrl.originalView instanceof this.App.View.Controller) {
                     ctrl.originalView.onSuperViewMounted();
                 }
-                
+
                 // Thông báo children (controller.children được duy trì bởi ChildrenRegistry)
                 if (ctrl.children && ctrl.children.length > 0) {
                     ctrl.children.forEach(childCtrl => {
@@ -186,28 +186,32 @@ export class LifecycleManager {
                 }
 
                 // Khởi động event listeners
-                ctrl._eventManager.startEventListener();
-                ctrl._bindingManager.startBindingEventListener();
-                ctrl._bindingManager.startClassBindingEventListener();
-                
+                this.start();
+
                 ctrl.isMounted = true;
                 ctrl.isReady = true;
                 ctrl.isRendered = true;
-                
+
                 if (typeof ctrl.view.mounted === 'function') {
                     ctrl.view.mounted();
                 }
-                
+
                 // logger.log(`✅ mounted COMPLETE: ${ctrl.path}`);
 
             } catch (error) {
                 logger.warn('Error in mounted lifecycle hook:', error);
             }
-            
+
             ctrl.states.__.readyToCommit = true;
         }
-        
+
         ctrl.isReadyToStateChangeListen = true;
+    }
+    mountOriginalView() {
+        const ctrl = this.controller;
+        if (ctrl.originalView && ctrl.originalView instanceof this.App.View.Controller) {
+            ctrl.originalView._lifecycleManager.mounted();
+        }
     }
 
     /**
@@ -237,30 +241,28 @@ export class LifecycleManager {
     unmounted() {
         const ctrl = this.controller;
         // logger.log(`🔻 unmounted START: ${ctrl.path}`);
-        
+
         if (ctrl.isMounted) {
             ctrl.isReadyToStateChangeListen = false;
             ctrl.states.__.readyToCommit = false;
-            
+
             this.beforeUnmount();
             this.unmounting();
-            
+
             // Remove scripts
             ctrl.removeScripts();
 
             // Stop event listeners
-            ctrl._eventManager.stopEventListener();
-            ctrl._bindingManager.stopBindingEventListener();
-            ctrl._bindingManager.stopClassBindingEventListener();
-            
+            this.stop();
+
             ctrl.isMounted = false;
         }
-        
+
         // Notify super view and children
         if (ctrl.originalView && ctrl.originalView instanceof this.App.View.Controller) {
             ctrl.originalView.onSuperViewUnmounted();
         }
-        
+
         if (ctrl.children && ctrl.children.length > 0) {
             ctrl.children.forEach(childCtrl => {
                 if (childCtrl && childCtrl instanceof this.App.View.Controller) {
@@ -275,12 +277,19 @@ export class LifecycleManager {
                 component.unmounted();
             });
         }
-        
+
         if (typeof ctrl.view.unmounted === 'function') {
             ctrl.view.unmounted();
         }
-        
+
         // logger.log(`✅ unmounted COMPLETE: ${ctrl.path}`);
+    }
+
+    unmountOriginalView() {
+        const ctrl = this.controller;
+        if (ctrl.originalView && ctrl.originalView instanceof this.App.View.Controller) {
+            ctrl.originalView._lifecycleManager.unmounted();
+        }
     }
 
     /**
@@ -289,7 +298,7 @@ export class LifecycleManager {
     destroy() {
         const ctrl = this.controller;
         // logger.log(`💀 destroy START: ${ctrl.path}`);
-        
+
         // Mark as destroyed to prevent processing after destroy
         ctrl.isDestroyed = true;
         this.beforeDestroy();
@@ -321,7 +330,7 @@ export class LifecycleManager {
         if (ctrl.originalView && ctrl.originalView instanceof this.App.View.Controller) {
             ctrl.originalView._lifecycleManager.destroy();
         }
-        
+
         // Destroy all children using ChildrenRegistry for proper cleanup
         if (ctrl._childrenRegistry) {
             ctrl._childrenRegistry.clear();
@@ -335,16 +344,51 @@ export class LifecycleManager {
                 });
             }
         }
-        
+
         ctrl._reactiveManager.destroy();
         if (ctrl.refElements && ctrl.refElements.length > 0) {
             ctrl.refElements.forEach(element => element.parentNode && element.parentNode.removeChild(element));
             ctrl.refElements = [];
         }
-        
+
         this.destroyed();
         // logger.log(`☠️ destroy COMPLETE: ${ctrl.path}`);
     }
+
+    destroyOriginalView() {
+        const ctrl = this.controller;
+        if (ctrl.originalView && ctrl.originalView instanceof this.App.View.Controller) {
+            ctrl.originalView._lifecycleManager.destroy();
+        }
+    }
+
+    start() {
+        const ctrl = this.controller;
+        if (ctrl.isStarted) {
+            return;
+        }
+        // Khởi động event listeners
+        ctrl._eventManager.startEventListener();
+        ctrl._bindingManager.startBindingEventListener();
+        ctrl._bindingManager.startClassBindingEventListener();
+        ctrl.isStarted = true;
+    }
+    stop() {
+        const ctrl = this.controller;
+        if (!ctrl.isStarted) {
+            return;
+        }
+        // Dừng event listeners
+        ctrl._eventManager.stopEventListener();
+        ctrl._bindingManager.stopBindingEventListener();
+        ctrl._bindingManager.stopClassBindingEventListener();
+
+        ctrl.isStarted = false;
+    }
+
+    /**
+     * Lấy tham chiếu đến App từ controller
+     */
 
     get App() {
         return this.controller.App;

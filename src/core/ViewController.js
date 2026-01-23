@@ -70,10 +70,7 @@ export class ViewController {
          * @type {string}
          */
         this.superViewPath = null;
-        /**
-         * @type {string}
-         */
-        this.superViewId = null;
+
         /**
          * @type {boolean}
          */
@@ -121,8 +118,6 @@ export class ViewController {
         /**
          * @type {function}
          */
-        this.addCSS = this._emptyFn;
-        this.removeCSS = this._emptyFn;
         /**
          * @type {Array<string>}
          */
@@ -154,10 +149,6 @@ export class ViewController {
          * @type {boolean}
          */
         this.isInitlized = false;
-        /**
-         * @type {TemplateEngine}
-         */
-        this.templateEngine = null;
 
         // Initialize
         this.path = path;
@@ -179,6 +170,7 @@ export class ViewController {
         this.isReady = false;
 
         this.isMarkupScanned = false;
+
         /**
          * @type {OneMarkupModel}
          */
@@ -214,13 +206,11 @@ export class ViewController {
 
         this.isReadyToStateChangeListen = false;
 
+        this.isStarted = false;
+
         this.childrenNeedToRefreshID = null;
 
-        // Memoization cache for expensive operations
-        this._memoCache = {
-            isHtmlString: new Map(),
-            escapedStrings: new Map()
-        };
+        this.renuewnChildrenIDs = [];
 
         // Initialize managers for better code organization
         /**
@@ -264,8 +254,6 @@ export class ViewController {
          */
         this._childrenRegistry = new ChildrenRegistry(this);
 
-        this.renuewnChildrenIDs = [];
-
         // Performance tracking
         this._perfMarks = new Map();
 
@@ -304,6 +292,7 @@ export class ViewController {
     /**
      * Destroy view controller and cleanup all resources
      * Prevents memory leaks by properly cleaning up all references
+     * Delegated to LifecycleManager for proper lifecycle management
      */
     destroy() {
         if (this.isDestroyed) {
@@ -312,39 +301,14 @@ export class ViewController {
 
         this._perfMark('destroy-start');
 
-        // Call lifecycle beforeDestroy
-        this._lifecycleManager?.beforeDestroy();
-
-        // Destroy all managers
-        this._reactiveManager?.destroy();
-        this._eventManager?.destroy();
-        this._resourceManager?.removeResources();
-        this._bindingManager?.destroy();
-
-        // Destroy state manager
-        this.states?.__?.destroy();
-
-        // Clear all references
-        this.children = [];
-        this.parent = null;
-        this.superView = null;
-        this.originalView = null;
-        this.eventListeners = [];
-        this.refElements = [];
-        this.loopContext = null;
-
-        // Clear data
-        this.data = {};
-        this.userDefined = {};
-        this.events = {};
-        this.sections = {};
-        this.__scope = {};
-
-        // Mark as destroyed
-        this.isDestroyed = true;
-
-        // Call lifecycle destroyed
-        this._lifecycleManager?.destroyed();
+        // Delegate to LifecycleManager for complete cleanup
+        // LifecycleManager.destroy() handles all cleanup including:
+        // - Lifecycle hooks (beforeDestroy, destroying, destroyed)
+        // - Manager cleanup (reactive, event, binding, etc.)
+        // - Resource cleanup (styles, scripts)
+        // - Children destruction
+        // - State cleanup
+        this._lifecycleManager?.destroy();
 
         this._perfMark('destroy-end');
         this._perfMeasure('destroy-start', 'destroy-end');

@@ -728,13 +728,15 @@ export class ViewManager {
             // This ensures CSS and scripts are properly removed
             // ============================================================
             let currentSuperView = this.CURRENT_SUPER_VIEW;
-            if (currentSuperView && currentSuperView instanceof ViewEngine && !currentSuperView.isDestroyed) {
+            const SUPER_VIEW_PATH = this.CURRENT_SUPER_VIEW_PATH;
+            if (currentSuperView && currentSuperView instanceof ViewEngine) {
                 // Call destroy() to remove CSS and scripts
-                currentSuperView.__._lifecycleManager.destroy();
+                currentSuperView.__._lifecycleManager.stop();
+                currentSuperView.__._lifecycleManager.destroyOriginalView();
             }
 
             // Destroy old PAGE_VIEW if exists
-            if (this.PAGE_VIEW && this.PAGE_VIEW instanceof ViewEngine && !this.PAGE_VIEW.isDestroyed) {
+            if (this.PAGE_VIEW && this.PAGE_VIEW instanceof ViewEngine) {
                 // Only destroy if it's different from currentSuperView to avoid double destroy
                 if (this.PAGE_VIEW !== currentSuperView) {
                     this.PAGE_VIEW.__._lifecycleManager.destroy();
@@ -763,7 +765,14 @@ export class ViewManager {
             }
 
             if (viewResult.ultraView && viewResult.ultraView instanceof ViewEngine) {
-                viewResult.ultraView.__._lifecycleManager.mounted();
+                if(viewResult.ultraView.path === SUPER_VIEW_PATH){
+                    // nếu là super view thì gọi mounted cho tất cả các view trong stack
+                    viewResult.ultraView.__._lifecycleManager.mountOriginalView();
+                    viewResult.ultraView.__._lifecycleManager.start();
+                }
+                else{
+                    viewResult.ultraView.__._lifecycleManager.mounted();
+                }
             }
             this.CURRENT_SUPER_VIEW_MOUNTED = true; // set trang thái super view mounted = true
 
@@ -1321,7 +1330,7 @@ export class ViewManager {
                 //     }
                 // });
                 const { url = '', method = 'GET', data = null, params = null, headers = {} } = fetchConfig;
-                this.App.Http.request(method, url, String(method).toLowerCase() === 'get' ? params : data, {headers}).then(response => {
+                this.App.Http.request(method, url, String(method).toLowerCase() === 'get' ? params : data, { headers }).then(response => {
                     if (!response || typeof response !== 'object' || !hasData(response.data)) {
                         logger.warn('App.View.renderOrScanView: No data returned from fetch for view', view.path);
                         return;
@@ -1414,7 +1423,10 @@ export class ViewManager {
             }
             // check if view is valid
             if (!this.templates[name]) {
-                console.warn(`App.View.view: View '${name}' not found in context`);
+                console.warn(`App.View.view: View '${name}' not found in context. SystemData Template: ${this.systemData?.__template__}`, {
+                    suggestedTemplates: Object.keys(this.templates).filter(k => k.toLowerCase().includes(name.toLowerCase()) || k.includes('header')),
+                    systemData: this.systemData
+                });
                 return null;
             }
             // check if view is valid
