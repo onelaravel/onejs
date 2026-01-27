@@ -10,6 +10,7 @@ import { StorageService } from './services/StorageService.js';
 import OneDOM from './OneDOM.js';
 import { viewLoader } from './ViewLoader.js';
 import { ViewController } from './ViewController.js';
+import StoreService, { StoreService } from './services/StoreService.js';
 
 
 class SSRViewData {
@@ -102,6 +103,10 @@ export class ViewManager {
          * @type {StorageService}
          */
         this.storageService = StorageService.getInstance('onejs_view_data');
+        /**
+         * @type {StoreService}
+         */
+        this.store = StoreService.getInstance('view.manager');
         /**
          * @type {HTMLElement}
          */
@@ -235,10 +240,10 @@ export class ViewManager {
         /**
          * @type {Map<string, ViewEngine>}
          */
-        this.cachedPageView = new Map();
+        this.cachedPageViews = new Map();
 
         this.cachedTimes = 600; // mặc định cache 10 phút
-
+        this.storeTTL = 30; // mặc định store 30 phút
 
         /**
          * @type {Object<string, any>}
@@ -376,31 +381,51 @@ export class ViewManager {
         // ============================================================
         const cachedLayoutPath = this.CURRENT_SUPER_VIEW_PATH;
         const cachedLayout = this.CURRENT_SUPER_VIEW;
-
-        if (this.templates[name]) {
-            // this.clearOldRendering();
-        }
-
-        // ✅ Restore cache info sau clear
-        this.CURRENT_SUPER_VIEW_PATH = cachedLayoutPath;
-        this.CURRENT_SUPER_VIEW = cachedLayout;
-
         this.renderTimes++;
         let message = null;
         this.CURRENT_SUPER_VIEW_MOUNTED = false;
-
+        this.CURRENT_SUPER_VIEW = null;
+        this.CURRENT_SUPER_VIEW_PATH = null;
+        const awaitData = null;
+        this.PAGE_VIEW = null;
         try {
-            let pageCacheKey = name.replace('.', '_') + '_' + urlPath?.replace(/\//g, '_');
-            if (this.cachedViews[pageCacheKey]) {
-                let cachedView = this.cachedViews[pageCacheKey];
+            
+            const viewStoreKey = name.replace('.', '_') + '_' + urlPath?.replace(/[\/\:]/g, '_');
+            const cachedPageView = this.cachedPageViews.get(viewStoreKey);
+            if (cachedPageView && cachedPageView instanceof ViewEngine) {
+                // Sử dụng lại cached page view
+                let html = cachedPageView.__._templateManager.renderedHtml || '';
+                this.PAGE_VIEW = cachedPageView;
+                let ultraView = cachedPageView;
+                let superView = null;
+                if(cachedPageView.superView && cachedPageView.superView instanceof ViewEngine){
+                    superView = cachedPageView.superView;
+                    ultraView = superView;
+                    this.CURRENT_SUPER_VIEW_MOUNTED = true;
+                    this.CURRENT_SUPER_VIEW = cachedPageView.superView;
+                    this.CURRENT_SUPER_VIEW_PATH = cachedPageView.superView.path;
+                    cachedPageView.__._templateManager.pushCachedSections();
+                    html = cachedLayoutPath === this.CURRENT_SUPER_VIEW_PATH ? superView.__.renderedHtml : this.renderView(superView);
+                }
+
+                return {
+                    html: html,
+                    isSuperView: superView ? true : false,
+                    needInsert: superView && (cachedLayoutPath === superView.path) ? false : true,
+                    superView: superView,
+                    ultraView: ultraView,
+                    error: null
+                };
 
             }
+
             let hasCache = false;
             if (this.cachedTimes > 0) {
-                let cacheKey = name.replace('.', '_') + '_' + urlPath?.replace(/\//g, '_');
+                let cacheKey = name.replace('.', '_') + '_' + urlPath?.replace(/[\/\:]/g, '_');
                 const cachedData = this.storageService.get(cacheKey);
                 if (cachedData) {
                     data = { ...data, ...cachedData };
+                    awaitData = data;;
                     hasCache = true;
                 }
             }
@@ -426,6 +451,14 @@ export class ViewManager {
                     this.storageService.set(cacheKey, oldCacheData, 3600); // cache trong 1 giờ
                 }
             }
+
+            // Lưu view vào store để quản lý vòng đời (ttl mặc định 30 phút)
+            this.store.set(viewStoreKey, view, this.storeTTL); // lưu view vào store
+            this.store.onExpire(viewStoreKey, (view) => {
+                if (view && view instanceof ViewEngine) {
+                    view.__._lifecycleManager.destroy();
+                }
+            });
 
             // Store view in array for tracking
             this.PAGE_VIEW = view;
@@ -756,11 +789,17 @@ export class ViewManager {
             // ============================================================
             const oldSuperViewPath = this.CURRENT_SUPER_VIEW_PATH;
             const oldSuperView = this.CURRENT_SUPER_VIEW;
+            const oldPageView = this.PAGE_VIEW;
             if (oldSuperView && oldSuperView instanceof ViewEngine) {
                 // Call destroy() to remove CSS and scripts
-                oldSuperView.__._lifecycleManager.stop();
-                oldSuperView.__._lifecycleManager.destroyOriginalView();
+                oldSuperView.__._lifecycleManager.unmounted();
+                // oldSuperView.__._lifecycleManager.destroyOriginalView();
             }
+            
+            
+
+
+
             // Destroy old PAGE_VIEW if exists
             const viewResult = this.loadView(viewName, params, route?.$urlPath || '');
             if (viewResult.error) {
@@ -773,20 +812,13 @@ export class ViewManager {
             // ============================================================
             const newSuperViewPath = viewResult.superView?.__.path;
             const isSameLayout = newSuperViewPath === oldSuperViewPath;
-            if (this.PAGE_VIEW && this.PAGE_VIEW instanceof ViewEngine) {
-                // Only destroy if it's different from currentSuperView to avoid double destroy
-                if (this.PAGE_VIEW !== oldSuperView) {
-                    this.PAGE_VIEW.__._lifecycleManager.destroy();
-                }
-            }
 
             // Chỉ destroy nếu layout KHÁC
             if (!isSameLayout) {
-                let currentSuperView = oldSuperView;
-                if (currentSuperView && currentSuperView instanceof ViewEngine) {
+                if (oldSuperView && oldSuperView instanceof ViewEngine) {
                     // Call destroy() to remove CSS and scripts
-                    currentSuperView.__._lifecycleManager.stop();
-                    currentSuperView.__._lifecycleManager.destroyOriginalView();
+                    oldSuperView.__._lifecycleManager.unmounted();
+                    // oldSuperView.__._lifecycleManager.destroyOriginalView();
                 }
 
             }
@@ -807,20 +839,14 @@ export class ViewManager {
                 this.emitChangedSections();
             }
 
+            
             if (viewResult.ultraView && viewResult.ultraView instanceof ViewEngine) {
-                if (!isSameLayout) {
-                    // Layout mới → full mount
-                    viewResult.ultraView.__._lifecycleManager.mountOriginalView();
-                    viewResult.ultraView.__._lifecycleManager.start();
-                } else {
-                    // Layout cũ (cached) → chỉ mount page view
-                    viewResult.ultraView.__._lifecycleManager.mounted();
-                }
+                viewResult.ultraView.__._lifecycleManager.mounted();
             }
 
             this.CURRENT_SUPER_VIEW_MOUNTED = true; // set trang thái super view mounted = true
 
-            this.scrollToTop()
+            this.PAGE_VIEW? this.PAGE_VIEW.__.scrollToOldPosition() : this.scrollToTop();
 
         } catch (error) {
             console.error('Error rendering view:', error);
@@ -1325,6 +1351,7 @@ export class ViewManager {
             }
             result = view.__[renderMethod]();
         }
+        const apiDataKey = view.__.path.replace(/\//g, '_') + '_' + view.__.urlPath.replace(/[\/\?\=\&]/g, '_') + '_data';
 
         // ====================================================================
         // CASE 3A: Has @await - Load data by current URL
@@ -1337,15 +1364,24 @@ export class ViewManager {
 
             // Handle based on mode
             if (mode === 'csr') {
-                // CSR: Load data from current URL then re-render
-                this.App.Api.getURIDAta().then(res => {
-                    if (!res || typeof res !== 'object' || !hasData(res.data)) {
-                        logger.warn('App.View.renderOrScanView: No data returned from getURIDAta for view', view.path);
-                        return;
-                    }
-                    view.__.refresh(res.data);
+                let storeData = this.store.get(apiDataKey);
+                if (storeData && hasData(storeData)) {
+                    // logger.log('App.View.renderOrScanView: Using cached store data for view', view.path);
+                    view.__.updateVariableData(storeData);
+                    result = view.__[renderMethod]();
+                }
+                else {
+                    // CSR: Load data from current URL then re-render
+                    this.App.Api.getURIDAta().then(res => {
+                        if (!res || typeof res !== 'object' || !hasData(res.data)) {
+                            logger.warn('App.View.renderOrScanView: No data returned from getURIDAta for view', view.path);
+                            return;
+                        }
+                        this.store.set(apiDataKey, res.data);
+                        view.__.refresh(res.data);
 
-                });
+                    });
+                }
             } else {
                 // SSR: Just setup relationships (no data loading needed)
                 result = view.__[renderMethod]();
@@ -2013,11 +2049,11 @@ export class ViewManager {
 
 
     /**
-  * Get route URL
-  * @param {string} name - Route name
-  * @param {object} params - Route parameters
-  * @returns {string} Route URL
-  */
+    * Get route URL
+    * @param {string} name - Route name
+    * @param {object} params - Route parameters
+    * @returns {string} Route URL
+    */
     route(name, params = {}) {
         return this.App.Router.getURL(name, params);
     }

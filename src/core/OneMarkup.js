@@ -85,6 +85,17 @@ export class OneMarkupModel {
     get nodes() {
         return this.__nodes;
     }
+    get outerHTML() {
+        let html = '';
+        html += this.__openTag.nodeType === Node.COMMENT_NODE ? `<!--${this.__openTag.nodeValue}-->` : this.__openTag.outerHTML;
+        let currentNode = this.__openTag.nextSibling;
+        while (currentNode && currentNode !== this.__closeTag) {
+            html += currentNode.nodeType === Node.COMMENT_NODE ? `<!--${currentNode.nodeValue}-->` : currentNode.outerHTML;
+            currentNode = currentNode.nextSibling;
+        }
+        html += this.__closeTag.nodeType === Node.COMMENT_NODE ? `<!--${this.__closeTag.nodeValue}-->` : this.__closeTag.outerHTML;
+        return html;
+    }
     getAttribute(name) {
         return this.__attributes[name];
     }

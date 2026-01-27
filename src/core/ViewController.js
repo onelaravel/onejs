@@ -43,17 +43,9 @@ export class ViewController {
          */
         this.isSuperView = false;
         /**
-         * @type {function}
-         */
-        this._emptyFn = () => { };
-        /**
          * @type {string}
          */
         this.id = null;
-        /**
-         * @type {function}
-         */
-        this.init = this._emptyFn;
         /**
          * @type {ViewController}
          */
@@ -115,6 +107,10 @@ export class ViewController {
          * @type {Object}
          */
         this.sections = {};
+        /**
+         * @type {Object<string, any>}
+         */
+        this.sectionData = {};
         /**
          * @type {function}
          */
@@ -257,6 +253,9 @@ export class ViewController {
         // Performance tracking
         this._perfMarks = new Map();
 
+        this.scrollY = 0;
+
+
     }
 
     /**
@@ -364,8 +363,6 @@ export class ViewController {
         // Set basic properties (giữ nguyên tên từ code gốc)
         this.id = config.viewId || uniqId();
         deleteProp(config, 'viewId');
-        this.init = config.init || this._emptyFn;
-        deleteProp(config, 'init');
         this.addCSS = config.addCSS || this._emptyFn;
         deleteProp(config, 'addCSS');
         this.removeCSS = config.removeCSS || this._emptyFn;
@@ -496,6 +493,22 @@ export class ViewController {
         return this._resourceManager.removeScripts();
     }
 
+    updateScrollPosition() {
+        if (this.isMounted) {
+            this.scrollY = window.scrollY || window.pageYOffset;
+        }
+    }
+
+    scrollToOldPosition() {
+        if (this.isMounted){
+            if(this.scrollY > 0) {
+                window.scrollTo(0, this.scrollY);
+            }
+            else {
+                window.scrollTo(0, 0);
+            }
+        }
+    }
 
     /**
      * Process defined properties and methods from config

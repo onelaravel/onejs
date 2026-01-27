@@ -146,6 +146,9 @@ export class LifecycleManager {
      * Đây là nơi scripts được chèn và event listeners được khởi động
      */
     mounted() {
+        /**
+         * @type {ViewController}
+         */
         const ctrl = this.controller;
         // logger.log(`🟩 mounted START: ${ctrl.path}`);
         ctrl.isDestroyed = false;
@@ -192,9 +195,13 @@ export class LifecycleManager {
                 ctrl.isReady = true;
                 ctrl.isRendered = true;
 
+                ctrl._templateManager.scanBlocks();
+
                 if (typeof ctrl.view.mounted === 'function') {
                     ctrl.view.mounted();
                 }
+
+
 
                 // logger.log(`✅ mounted COMPLETE: ${ctrl.path}`);
 
