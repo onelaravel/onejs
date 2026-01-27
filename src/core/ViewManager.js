@@ -370,14 +370,31 @@ export class ViewManager {
      */
     loadView(name, data = {}, urlPath = '') {
         // console.log('🔍 App.View.loadView called with:', name, data);
+
+        // ============================================================
+        // CACHE FIX: Lưu layout cache info TRƯỚC khi clear
+        // ============================================================
+        const cachedLayoutPath = this.CURRENT_SUPER_VIEW_PATH;
+        const cachedLayout = this.CURRENT_SUPER_VIEW;
+
         if (this.templates[name]) {
-            this.clearOldRendering();
+            // this.clearOldRendering();
         }
+
+        // ✅ Restore cache info sau clear
+        this.CURRENT_SUPER_VIEW_PATH = cachedLayoutPath;
+        this.CURRENT_SUPER_VIEW = cachedLayout;
+
         this.renderTimes++;
         let message = null;
         this.CURRENT_SUPER_VIEW_MOUNTED = false;
 
         try {
+            let pageCacheKey = name.replace('.', '_') + '_' + urlPath?.replace(/\//g, '_');
+            if (this.cachedViews[pageCacheKey]) {
+                let cachedView = this.cachedViews[pageCacheKey];
+
+            }
             let hasCache = false;
             if (this.cachedTimes > 0) {
                 let cacheKey = name.replace('.', '_') + '_' + urlPath?.replace(/\//g, '_');
@@ -527,9 +544,20 @@ export class ViewManager {
 
 
     scanView(name, route = null) {
+        // ============================================================
+        // CACHE FIX: Lưu layout cache info TRƯỚC khi clear
+        // ============================================================
+        const cachedLayoutPath = this.CURRENT_SUPER_VIEW_PATH;
+        const cachedLayout = this.CURRENT_SUPER_VIEW;
+
         if (this.templates[name]) {
             this.clearOldRendering();
         }
+
+        // ✅ Restore cache info sau clear
+        this.CURRENT_SUPER_VIEW_PATH = cachedLayoutPath;
+        this.CURRENT_SUPER_VIEW = cachedLayout;
+
         this.renderTimes++;
         let message = null;
         this.CURRENT_SUPER_VIEW_MOUNTED = false;
@@ -724,39 +752,54 @@ export class ViewManager {
     mountView(viewName, params = {}, route = null) {
         try {
             // ============================================================
-            // CLEANUP: Destroy old views before loading new view
-            // This ensures CSS and scripts are properly removed
+            // STEP 1: Lưu layout cũ TRƯỚC khi loadView (vì loadView sẽ update)
             // ============================================================
-            let currentSuperView = this.CURRENT_SUPER_VIEW;
-            const SUPER_VIEW_PATH = this.CURRENT_SUPER_VIEW_PATH;
-            if (currentSuperView && currentSuperView instanceof ViewEngine) {
+            const oldSuperViewPath = this.CURRENT_SUPER_VIEW_PATH;
+            const oldSuperView = this.CURRENT_SUPER_VIEW;
+            if (oldSuperView && oldSuperView instanceof ViewEngine) {
                 // Call destroy() to remove CSS and scripts
-                currentSuperView.__._lifecycleManager.stop();
-                currentSuperView.__._lifecycleManager.destroyOriginalView();
+                oldSuperView.__._lifecycleManager.stop();
+                oldSuperView.__._lifecycleManager.destroyOriginalView();
             }
-
             // Destroy old PAGE_VIEW if exists
-            if (this.PAGE_VIEW && this.PAGE_VIEW instanceof ViewEngine) {
-                // Only destroy if it's different from currentSuperView to avoid double destroy
-                if (this.PAGE_VIEW !== currentSuperView) {
-                    this.PAGE_VIEW.__._lifecycleManager.destroy();
-                }
-            }
-
             const viewResult = this.loadView(viewName, params, route?.$urlPath || '');
             if (viewResult.error) {
                 console.error('View rendering error:', viewResult.error);
                 return;
             }
 
+            // ============================================================
+            // STEP 2: Check cache layout - nếu giống thì KHÔNG destroy
+            // ============================================================
+            const newSuperViewPath = viewResult.superView?.__.path;
+            const isSameLayout = newSuperViewPath === oldSuperViewPath;
+            if (this.PAGE_VIEW && this.PAGE_VIEW instanceof ViewEngine) {
+                // Only destroy if it's different from currentSuperView to avoid double destroy
+                if (this.PAGE_VIEW !== oldSuperView) {
+                    this.PAGE_VIEW.__._lifecycleManager.destroy();
+                }
+            }
+
+            // Chỉ destroy nếu layout KHÁC
+            if (!isSameLayout) {
+                let currentSuperView = oldSuperView;
+                if (currentSuperView && currentSuperView instanceof ViewEngine) {
+                    // Call destroy() to remove CSS and scripts
+                    currentSuperView.__._lifecycleManager.stop();
+                    currentSuperView.__._lifecycleManager.destroyOriginalView();
+                }
+
+            }
+
+            // ============================================================
+            // STEP 3: Render và mount như bình thường
+            // ============================================================
             if (viewResult.needInsert && viewResult.html) {
                 const container = this.container || document.querySelector('#app-root') || document.querySelector('#app') || document.body;
                 const html = viewResult.html
                 if (container) {
                     OneDOM.setHTML(container, html);
                 }
-            } else {
-                // console.log('Router: Not updating DOM - needInsert:', viewResult.needInsert, 'html:', !!viewResult.html);
             }
 
             // Emit changed sections
@@ -765,15 +808,16 @@ export class ViewManager {
             }
 
             if (viewResult.ultraView && viewResult.ultraView instanceof ViewEngine) {
-                if(viewResult.ultraView.path === SUPER_VIEW_PATH){
-                    // nếu là super view thì gọi mounted cho tất cả các view trong stack
+                if (!isSameLayout) {
+                    // Layout mới → full mount
                     viewResult.ultraView.__._lifecycleManager.mountOriginalView();
                     viewResult.ultraView.__._lifecycleManager.start();
-                }
-                else{
+                } else {
+                    // Layout cũ (cached) → chỉ mount page view
                     viewResult.ultraView.__._lifecycleManager.mounted();
                 }
             }
+
             this.CURRENT_SUPER_VIEW_MOUNTED = true; // set trang thái super view mounted = true
 
             this.scrollToTop()
@@ -1415,9 +1459,11 @@ export class ViewManager {
             // check if view is cached
             if (cache && this.cachedViews[name]) {
                 const view = this.cachedViews[name];
-                view.reset();
-                if (data) {
-                    view.__.updateVariableData({ ...data });
+                if (data && hasData(data)) {
+                    view.reset();
+                    if (data) {
+                        view.__.updateVariableData({ ...data });
+                    }
                 }
                 return view;
             }
@@ -1448,7 +1494,9 @@ export class ViewManager {
 
             view.__.setApp(this.App);
             // cache view
-            this.cachedViews[name] = view;
+            if (cache) {
+                this.cachedViews[name] = view;
+            }
             return view;
 
         } catch (error) {
@@ -1503,21 +1551,32 @@ export class ViewManager {
             // logger.log(`🗑️ View.clearOldRendering: Cache too large (${cachedKeys.length}), trimming to ${MAX_CACHED_VIEWS}`);
 
             // Remove oldest views (simple strategy: remove first N)
+            // ⚠️ NHƯNG: KHÔNG destroy layout hiện tại đang cache!
             const toRemove = cachedKeys.slice(0, cachedKeys.length - MAX_CACHED_VIEWS);
             toRemove.forEach(key => {
                 const view = this.cachedViews[key];
                 if (view) {
-                    this.unmountView(view);
+                    // Kiểm tra xem layout này có phải layout hiện tại không
+                    if (view !== this.CURRENT_SUPER_VIEW) {
+                        this.unmountView(view);
+                    }
                 }
                 delete this.cachedViews[key];
             });
         }
+
+        // ================================================================
+        // 3. Clear stacks - NHƯNG GỮ LẠI cache info
+        // ================================================================
+        // Xoá stacks nhưng giữ CURRENT_SUPER_VIEW_PATH để check cache sau
         this.ALL_VIEW_STACK = [];
         this.SUPER_VIEW_STACK = [];
         this.PAGE_VIEW = null;
+        // ✅ KHÔNG xoá: this.CURRENT_SUPER_VIEW_PATH
+        // ✅ KHÔNG xoá: this.CURRENT_SUPER_VIEW
 
         // ================================================================
-        // 3. Clear orphaned event data to prevent memory leaks
+        // 4. Clear orphaned event data to prevent memory leaks
         // ================================================================
         if (this.CURRENT_VIEW && this.CURRENT_VIEW.__) {
             this.CURRENT_VIEW.__.clearOrphanedEventData();
