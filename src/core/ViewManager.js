@@ -10,7 +10,7 @@ import { StorageService } from './services/StorageService.js';
 import OneDOM from './OneDOM.js';
 import { viewLoader } from './ViewLoader.js';
 import { ViewController } from './ViewController.js';
-import StoreService, { StoreService } from './services/StoreService.js';
+import { StoreService } from './services/StoreService.js';
 
 
 class SSRViewData {
